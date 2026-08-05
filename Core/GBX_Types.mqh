@@ -5,16 +5,23 @@
 
 struct GBXConfig
   {
-   string          symbol;
-   ENUM_TIMEFRAMES primary_timeframe;
-   ENUM_TIMEFRAMES context_timeframe;
-   long            magic_number;
-   bool            trading_enabled;
-   bool            debug_logging;
-   double          risk_per_trade_percent;
-   double          daily_loss_limit_percent;
-   int             max_open_positions;
-   int             max_spread_points;
+   string                symbol;
+   ENUM_TIMEFRAMES       primary_timeframe;
+   ENUM_TIMEFRAMES       context_timeframe;
+   long                  magic_number;
+   bool                  trading_enabled;
+   bool                  debug_logging;
+   ENUM_GBX_RISK_PROFILE risk_profile;
+   double                risk_per_trade_percent;
+   double                max_risk_per_trade_percent;
+   double                max_aggregate_risk_percent;
+   double                daily_loss_limit_percent;
+   int                   max_open_positions;
+   int                   max_spread_points;
+   bool                  allow_pyramiding;
+   bool                  allow_hedging;
+   double                min_quality_score;
+   double                min_confidence;
   };
 
 struct GBXRuntimeState
@@ -31,16 +38,20 @@ struct GBXRuntimeState
 
 struct GBXMarketState
   {
-   ENUM_GBX_MARKET_REGIME regime;
-   ENUM_GBX_DIRECTION     direction;
-   ENUM_GBX_SESSION       session;
-   double                 trend_score;
-   double                 structure_score;
-   double                 momentum_score;
-   double                 volatility_score;
-   double                 liquidity_score;
-   double                 confidence;
-   double                 quality;
+   ENUM_GBX_MARKET_REGIME       regime;
+   ENUM_GBX_DIRECTION           direction;
+   ENUM_GBX_SESSION             session;
+   ENUM_GBX_MARKET_FAVORABILITY favorability;
+   bool                         is_tradeable;
+   bool                         can_add_position;
+   double                       trend_score;
+   double                       structure_score;
+   double                       momentum_score;
+   double                       volatility_score;
+   double                       liquidity_score;
+   double                       confidence;
+   double                       quality;
+   double                       risk_multiplier;
   };
 
 struct GBXDecision
@@ -51,18 +62,37 @@ struct GBXDecision
    string          reason;
   };
 
+struct GBXTradePlan
+  {
+   ENUM_GBX_ACTION action;
+   bool            is_addition;
+   double          entry_price;
+   double          stop_loss;
+   double          take_profit;
+   double          risk_percent;
+   double          planned_reward_risk;
+   string          rationale;
+  };
+
 void GBXInitializeConfig(GBXConfig &config)
   {
-   config.symbol                   = _Symbol;
-   config.primary_timeframe        = PERIOD_M5;
-   config.context_timeframe        = PERIOD_H1;
-   config.magic_number             = 26080501;
-   config.trading_enabled          = false;
-   config.debug_logging            = false;
-   config.risk_per_trade_percent   = 0.50;
-   config.daily_loss_limit_percent = 2.00;
-   config.max_open_positions       = 1;
-   config.max_spread_points        = 50;
+   config.symbol                      = _Symbol;
+   config.primary_timeframe           = PERIOD_M5;
+   config.context_timeframe           = PERIOD_H1;
+   config.magic_number                = 26080501;
+   config.trading_enabled             = false;
+   config.debug_logging               = false;
+   config.risk_profile                = GBX_RISK_BALANCED;
+   config.risk_per_trade_percent      = 0.50;
+   config.max_risk_per_trade_percent  = 0.75;
+   config.max_aggregate_risk_percent  = 2.00;
+   config.daily_loss_limit_percent    = 3.00;
+   config.max_open_positions          = 3;
+   config.max_spread_points           = 50;
+   config.allow_pyramiding            = true;
+   config.allow_hedging               = false;
+   config.min_quality_score           = 70.0;
+   config.min_confidence              = 65.0;
   }
 
 void GBXInitializeRuntimeState(GBXRuntimeState &state)
@@ -82,6 +112,9 @@ void GBXInitializeMarketState(GBXMarketState &state)
    state.regime           = GBX_REGIME_UNKNOWN;
    state.direction        = GBX_DIRECTION_NEUTRAL;
    state.session          = GBX_SESSION_NONE;
+   state.favorability     = GBX_FAVORABILITY_UNKNOWN;
+   state.is_tradeable     = false;
+   state.can_add_position = false;
    state.trend_score      = 0.0;
    state.structure_score  = 0.0;
    state.momentum_score   = 0.0;
@@ -89,6 +122,19 @@ void GBXInitializeMarketState(GBXMarketState &state)
    state.liquidity_score  = 0.0;
    state.confidence       = 0.0;
    state.quality          = 0.0;
+   state.risk_multiplier  = 0.0;
+  }
+
+void GBXInitializeTradePlan(GBXTradePlan &plan)
+  {
+   plan.action              = GBX_ACTION_WAIT;
+   plan.is_addition         = false;
+   plan.entry_price         = 0.0;
+   plan.stop_loss           = 0.0;
+   plan.take_profit         = 0.0;
+   plan.risk_percent        = 0.0;
+   plan.planned_reward_risk = 0.0;
+   plan.rationale           = "";
   }
 
 #endif
