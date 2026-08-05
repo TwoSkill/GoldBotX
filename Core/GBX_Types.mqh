@@ -54,12 +54,20 @@ struct GBXMarketState
    double                       risk_multiplier;
   };
 
+struct GBXStrategySelection
+  {
+   ENUM_GBX_STRATEGY strategy;
+   double            score;
+   string            rationale;
+  };
+
 struct GBXDecision
   {
-   ENUM_GBX_ACTION action;
-   double          confidence;
-   double          quality;
-   string          reason;
+   ENUM_GBX_ACTION   action;
+   ENUM_GBX_STRATEGY strategy;
+   double            confidence;
+   double            quality;
+   string            reason;
   };
 
 struct GBXTradePlan
@@ -123,6 +131,22 @@ void GBXInitializeMarketState(GBXMarketState &state)
    state.confidence       = 0.0;
    state.quality          = 0.0;
    state.risk_multiplier  = 0.0;
+  }
+
+void GBXInitializeStrategySelection(GBXStrategySelection &selection)
+  {
+   selection.strategy  = GBX_STRATEGY_WAIT;
+   selection.score     = 0.0;
+   selection.rationale = "";
+  }
+
+void GBXInitializeDecision(GBXDecision &decision)
+  {
+   decision.action     = GBX_ACTION_WAIT;
+   decision.strategy   = GBX_STRATEGY_WAIT;
+   decision.confidence = 0.0;
+   decision.quality    = 0.0;
+   decision.reason     = "";
   }
 
 void GBXInitializeTradePlan(GBXTradePlan &plan)
