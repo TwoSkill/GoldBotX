@@ -70,9 +70,9 @@ private:
      {
       for(int i=0;i<GBX_STANDARD_TIMEFRAME_COUNT;i++)
         {
-         GBXTimeframeData &timeframe_data = m_snapshot.timeframes[i];
-         timeframe_data.available = ReadClosedBar(timeframe_data.timeframe,
-                                                   timeframe_data.last_closed_bar);
+         m_snapshot.timeframes[i].available =
+            ReadClosedBar(m_snapshot.timeframes[i].timeframe,
+                          m_snapshot.timeframes[i].last_closed_bar);
         }
      }
 
