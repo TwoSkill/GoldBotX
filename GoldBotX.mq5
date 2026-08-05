@@ -7,6 +7,8 @@
 #include "Feature/GBX_FeatureEngine.mqh"
 #include "Analyzer/GBX_AnalyzerEngine.mqh"
 #include "Classifier/GBX_MarketClassifier.mqh"
+#include "Strategy/GBX_StrategySelector.mqh"
+#include "Decision/GBX_DecisionEngine.mqh"
 
 input group "GoldBot X — Core"
 input long            InpMagicNumber             = 26080501;
@@ -33,7 +35,9 @@ CGBXDataEngine    g_data;
 CGBXFeatureEngine  g_features;
 CGBXAnalyzerEngine   g_analyzers;
 CGBXMarketClassifier g_classifier;
-GBXConfig            g_config;
+CGBXStrategySelector  g_strategy_selector;
+CGBXDecisionEngine    g_decision_engine;
+GBXConfig             g_config;
 
 void BuildConfiguration(GBXConfig &config)
   {
@@ -91,6 +95,13 @@ int OnInit()
       return INIT_FAILED;
      }
 
+   if(!g_strategy_selector.Initialize(g_config) || !g_decision_engine.Initialize(g_config))
+     {
+      g_data.Shutdown();
+      g_core.Shutdown(REASON_INITFAILED);
+      return INIT_FAILED;
+     }
+
    EventSetTimer(GBX_TIMER_SECONDS);
    return INIT_SUCCEEDED;
   }
@@ -116,7 +127,14 @@ void RefreshAnalysisPipeline(void)
       return;
 
    GBXAnalysisSnapshot analysis = g_analyzers.GetSnapshot();
-   g_classifier.Refresh(data,features,analysis);
+   if(!g_classifier.Refresh(data,features,analysis))
+      return;
+
+   GBXMarketState market = g_classifier.GetState();
+   g_strategy_selector.Refresh(market);
+
+   GBXStrategySelection strategy = g_strategy_selector.GetSelection();
+   g_decision_engine.Refresh(market,strategy);
   }
 
 void OnTick()
