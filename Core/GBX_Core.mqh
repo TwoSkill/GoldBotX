@@ -116,8 +116,8 @@ public:
       if(!m_runtime.initialized)
          return;
 
-      m_logger.Info(StringFormat("Core shutdown. Reason=%d, ticks=%I64u.",
-                                 reason,m_runtime.tick_count));
+      m_logger.Info(StringFormat("Core shutdown. Reason=%d, ticks=%I64d.",
+                                 reason,(long)m_runtime.tick_count));
       m_runtime.initialized = false;
      }
 
@@ -139,12 +139,12 @@ public:
       return m_runtime.initialized;
      }
 
-   const GBXRuntimeState GetRuntimeState(void) const
+   GBXRuntimeState GetRuntimeState(void) const
      {
       return m_runtime;
      }
 
-   const GBXMarketState GetMarketState(void) const
+   GBXMarketState GetMarketState(void) const
      {
       return m_market;
      }
