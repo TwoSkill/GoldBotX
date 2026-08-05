@@ -48,21 +48,32 @@ private:
       bar.lower_wick  = MathMin(rate.open,rate.close)-rate.low;
      }
 
+   bool ReadClosedBar(const ENUM_TIMEFRAMES timeframe,GBXBarData &bar)
+     {
+      MqlRates rates[];
+      ArraySetAsSeries(rates,true);
+
+      if(CopyRates(m_symbol,timeframe,1,1,rates) != 1)
+         return false;
+
+      BuildBarData(rates[0],bar);
+      return true;
+     }
+
    bool RefreshBars(void)
      {
-      MqlRates primary_rates[];
-      MqlRates context_rates[];
-      ArraySetAsSeries(primary_rates,true);
-      ArraySetAsSeries(context_rates,true);
+      return ReadClosedBar(m_primary_timeframe,m_snapshot.primary_bar) &&
+             ReadClosedBar(m_context_timeframe,m_snapshot.context_bar);
+     }
 
-      if(CopyRates(m_symbol,m_primary_timeframe,1,1,primary_rates) != 1)
-         return false;
-      if(CopyRates(m_symbol,m_context_timeframe,1,1,context_rates) != 1)
-         return false;
-
-      BuildBarData(primary_rates[0],m_snapshot.primary_bar);
-      BuildBarData(context_rates[0],m_snapshot.context_bar);
-      return true;
+   void RefreshAllTimeframes(void)
+     {
+      for(int i=0;i<GBX_STANDARD_TIMEFRAME_COUNT;i++)
+        {
+         GBXTimeframeData &timeframe_data = m_snapshot.timeframes[i];
+         timeframe_data.available = ReadClosedBar(timeframe_data.timeframe,
+                                                   timeframe_data.last_closed_bar);
+        }
      }
 
    bool RefreshIndicators(void)
@@ -129,7 +140,7 @@ public:
       if(!Refresh())
          m_logger.Warning("Market history is still loading; data collection will retry on the next event.");
 
-      m_logger.Info("Data Engine initialized.");
+      m_logger.Info("Data Engine initialized with full multi-timeframe coverage.");
       return true;
      }
 
@@ -159,6 +170,8 @@ public:
 
       if(m_point > 0.0)
          m_snapshot.quote.spread_points = (tick.ask-tick.bid)/m_point;
+
+      RefreshAllTimeframes();
 
       if(!RefreshBars() || !RefreshIndicators())
         {
