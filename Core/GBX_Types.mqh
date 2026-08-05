@@ -75,6 +75,7 @@ struct GBXTradePlan
    ENUM_GBX_ACTION action;
    bool            is_addition;
    double          entry_price;
+   double          volume;
    double          stop_loss;
    double          take_profit;
    double          risk_percent;
@@ -154,6 +155,7 @@ void GBXInitializeTradePlan(GBXTradePlan &plan)
    plan.action              = GBX_ACTION_WAIT;
    plan.is_addition         = false;
    plan.entry_price         = 0.0;
+   plan.volume              = 0.0;
    plan.stop_loss           = 0.0;
    plan.take_profit         = 0.0;
    plan.risk_percent        = 0.0;
