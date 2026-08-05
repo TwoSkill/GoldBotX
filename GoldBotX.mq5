@@ -5,6 +5,7 @@
 #include "Core/GBX_Core.mqh"
 #include "Data/GBX_DataEngine.mqh"
 #include "Feature/GBX_FeatureEngine.mqh"
+#include "Analyzer/GBX_AnalyzerEngine.mqh"
 
 input group "GoldBot X — Core"
 input long            InpMagicNumber             = 26080501;
@@ -28,8 +29,9 @@ input double                InpMinConfidence           = 65.0;
 
 CGBXCore       g_core;
 CGBXDataEngine    g_data;
-CGBXFeatureEngine g_features;
-GBXConfig         g_config;
+CGBXFeatureEngine  g_features;
+CGBXAnalyzerEngine g_analyzers;
+GBXConfig          g_config;
 
 void BuildConfiguration(GBXConfig &config)
   {
@@ -73,6 +75,13 @@ int OnInit()
       return INIT_FAILED;
      }
 
+   if(!g_analyzers.Initialize(g_config))
+     {
+      g_data.Shutdown();
+      g_core.Shutdown(REASON_INITFAILED);
+      return INIT_FAILED;
+     }
+
    EventSetTimer(GBX_TIMER_SECONDS);
    return INIT_SUCCEEDED;
   }
@@ -90,7 +99,11 @@ void RefreshAnalysisPipeline(void)
       return;
 
    GBXDataSnapshot data = g_data.GetSnapshot();
-   g_features.Refresh(data);
+   if(!g_features.Refresh(data))
+      return;
+
+   GBXFeatureSnapshot features = g_features.GetSnapshot();
+   g_analyzers.Refresh(data,features);
   }
 
 void OnTick()
