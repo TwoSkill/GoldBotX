@@ -122,11 +122,12 @@ public:
          features.spread_quality*0.15 +
          features.candle_quality*0.10);
 
+      const double alignment_bonus = features.primary_context_aligned ? 10.0 : 0.0;
       m_state.confidence = ClampScore(
          features.preliminary_quality*0.40 +
          analysis.trend.score*0.30 +
          analysis.structure.score*0.20 +
-         features.primary_context_aligned*10.0);
+         alignment_bonus);
 
       const bool permitted_regime =
          m_state.regime == GBX_REGIME_BULLISH_TREND ||
