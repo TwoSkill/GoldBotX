@@ -127,11 +127,7 @@ public:
         }
 
       if(!Refresh())
-        {
-         m_logger.Error("Insufficient market history to initialize the data engine.");
-         Shutdown();
-         return false;
-        }
+         m_logger.Warning("Market history is still loading; data collection will retry on the next event.");
 
       m_logger.Info("Data Engine initialized.");
       return true;
