@@ -60,6 +60,20 @@ private:
       return true;
      }
 
+   bool ReadTimeframeBars(GBXTimeframeData &timeframe_data)
+     {
+      MqlRates rates[];
+      ArraySetAsSeries(rates,true);
+
+      if(CopyRates(m_symbol,timeframe_data.timeframe,1,3,rates) != 3)
+         return false;
+
+      BuildBarData(rates[0],timeframe_data.last_closed_bar);
+      BuildBarData(rates[1],timeframe_data.previous_closed_bar);
+      BuildBarData(rates[2],timeframe_data.older_closed_bar);
+      return true;
+     }
+
    bool RefreshBars(void)
      {
       return ReadClosedBar(m_primary_timeframe,m_snapshot.primary_bar) &&
@@ -69,11 +83,7 @@ private:
    void RefreshAllTimeframes(void)
      {
       for(int i=0;i<GBX_STANDARD_TIMEFRAME_COUNT;i++)
-        {
-         m_snapshot.timeframes[i].available =
-            ReadClosedBar(m_snapshot.timeframes[i].timeframe,
-                          m_snapshot.timeframes[i].last_closed_bar);
-        }
+         m_snapshot.timeframes[i].available = ReadTimeframeBars(m_snapshot.timeframes[i]);
      }
 
    bool RefreshIndicators(void)
