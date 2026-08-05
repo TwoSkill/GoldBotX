@@ -31,6 +31,8 @@ struct GBXTimeframeData
   {
    ENUM_TIMEFRAMES timeframe;
    GBXBarData      last_closed_bar;
+   GBXBarData      previous_closed_bar;
+   GBXBarData      older_closed_bar;
    bool            available;
   };
 
@@ -118,6 +120,8 @@ void GBXInitializeDataSnapshot(GBXDataSnapshot &snapshot)
      {
       snapshot.timeframes[i].timeframe = GBXStandardTimeframeAt(i);
       GBXInitializeBarData(snapshot.timeframes[i].last_closed_bar);
+      GBXInitializeBarData(snapshot.timeframes[i].previous_closed_bar);
+      GBXInitializeBarData(snapshot.timeframes[i].older_closed_bar);
       snapshot.timeframes[i].available = false;
      }
 
