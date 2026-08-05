@@ -1,8 +1,9 @@
 #property copyright "GoldBot X"
-#property version   "0.1.0"
+#property version   "0.2.0"
 #property strict
 
 #include "Core/GBX_Core.mqh"
+#include "Data/GBX_DataEngine.mqh"
 
 input group "GoldBot X — Core"
 input long            InpMagicNumber             = 26080501;
@@ -15,7 +16,9 @@ input double          InpDailyLossLimitPercent   = 2.00;
 input int             InpMaxOpenPositions        = 1;
 input int             InpMaxSpreadPoints         = 50;
 
-CGBXCore g_core;
+CGBXCore       g_core;
+CGBXDataEngine g_data;
+GBXConfig      g_config;
 
 void BuildConfiguration(GBXConfig &config)
   {
@@ -34,11 +37,16 @@ void BuildConfiguration(GBXConfig &config)
 
 int OnInit()
   {
-   GBXConfig config;
-   BuildConfiguration(config);
+   BuildConfiguration(g_config);
 
-   if(!g_core.Initialize(config))
+   if(!g_core.Initialize(g_config))
       return INIT_FAILED;
+
+   if(!g_data.Initialize(g_config))
+     {
+      g_core.Shutdown(REASON_INITFAILED);
+      return INIT_FAILED;
+     }
 
    EventSetTimer(GBX_TIMER_SECONDS);
    return INIT_SUCCEEDED;
@@ -47,15 +55,18 @@ int OnInit()
 void OnDeinit(const int reason)
   {
    EventKillTimer();
+   g_data.Shutdown();
    g_core.Shutdown(reason);
   }
 
 void OnTick()
   {
    g_core.OnTick();
+   g_data.Refresh();
   }
 
 void OnTimer()
   {
    g_core.OnTimer();
+   g_data.Refresh();
   }
