@@ -38,7 +38,12 @@ private:
 
       double volume=risk_money/((distance/tick_size)*tick_value);
       volume=MathFloor(volume/step)*step;
-      volume=MathMin(maximum,MathMax(minimum,volume));
+
+      // Never increase volume to the broker minimum: that would exceed the risk budget.
+      if(volume<minimum)
+         return 0.0;
+
+      volume=MathMin(maximum,volume);
       return NormalizeDouble(volume,2);
      }
 
