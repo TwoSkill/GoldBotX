@@ -8,6 +8,25 @@ class CGBXRiskManager
   {
 private:
    GBXConfig m_config;
+   datetime  m_risk_day;
+   double    m_day_start_equity;
+
+   bool DailyLossLimitReached(void)
+     {
+      const datetime today=StringToTime(TimeToString(TimeCurrent(),TIME_DATE));
+      if(today!=m_risk_day)
+        {
+         m_risk_day=today;
+         m_day_start_equity=AccountInfoDouble(ACCOUNT_EQUITY);
+        }
+
+      if(m_day_start_equity<=0.0)
+         return true;
+
+      const double loss_percent=(m_day_start_equity-AccountInfoDouble(ACCOUNT_EQUITY))/
+                                m_day_start_equity*100.0;
+      return loss_percent>=m_config.daily_loss_limit_percent;
+     }
 
    int OpenPositionsCount(void) const
      {
@@ -51,11 +70,15 @@ public:
    CGBXRiskManager(void)
      {
       GBXInitializeConfig(m_config);
+      m_risk_day=0;
+      m_day_start_equity=0.0;
      }
 
    bool Initialize(const GBXConfig &config)
      {
       m_config=config;
+      m_risk_day=StringToTime(TimeToString(TimeCurrent(),TIME_DATE));
+      m_day_start_equity=AccountInfoDouble(ACCOUNT_EQUITY);
       return true;
      }
 
@@ -67,6 +90,8 @@ public:
       GBXInitializeTradePlan(plan);
 
       if(decision.action!=GBX_ACTION_BUY && decision.action!=GBX_ACTION_SELL)
+         return false;
+      if(DailyLossLimitReached())
          return false;
 
       const int open_positions=OpenPositionsCount();
