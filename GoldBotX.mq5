@@ -11,6 +11,9 @@
 #include "Decision/GBX_DecisionEngine.mqh"
 #include "Risk/GBX_RiskManager.mqh"
 #include "Execution/GBX_ExecutionEngine.mqh"
+#include "Trade/GBX_TradeManager.mqh"
+#include "Memory/GBX_MemoryEngine.mqh"
+#include "Reports/GBX_ReportEngine.mqh"
 
 input group "GoldBot X — Core"
 input long            InpMagicNumber             = 26080501;
@@ -41,6 +44,9 @@ CGBXStrategySelector  g_strategy_selector;
 CGBXDecisionEngine    g_decision_engine;
 CGBXRiskManager       g_risk_manager;
 CGBXExecutionEngine   g_execution_engine;
+CGBXTradeManager      g_trade_manager;
+CGBXMemoryEngine      g_memory_engine;
+CGBXReportEngine      g_report_engine;
 GBXConfig             g_config;
 
 void BuildConfiguration(GBXConfig &config)
@@ -100,7 +106,9 @@ int OnInit()
      }
 
    if(!g_strategy_selector.Initialize(g_config) || !g_decision_engine.Initialize(g_config) ||
-      !g_risk_manager.Initialize(g_config) || !g_execution_engine.Initialize(g_config))
+      !g_risk_manager.Initialize(g_config) || !g_execution_engine.Initialize(g_config) ||
+      !g_trade_manager.Initialize(g_config) || !g_memory_engine.Initialize(g_config) ||
+      !g_report_engine.Initialize(g_config))
      {
       g_data.Shutdown();
       g_core.Shutdown(REASON_INITFAILED);
@@ -142,11 +150,13 @@ void RefreshAnalysisPipeline(void)
    g_decision_engine.Refresh(market,strategy);
 
    GBXDecision decision = g_decision_engine.GetDecision();
-   GBXTradePlan plan;
-   g_risk_manager.BuildTradePlan(decision,market,data,plan);
+   g_memory_engine.RecordDecision(decision,market,data.primary_bar.time);
+   g_report_engine.UpdateDailyReport(market);
+   g_trade_manager.Manage(data,market);
 
-   // Execution remains disabled by default and is enabled only after compilation and backtest validation.
-   if(g_config.trading_enabled && plan.volume > 0.0)
+   GBXTradePlan plan;
+   if(g_risk_manager.BuildTradePlan(decision,market,data,plan) &&
+      g_config.trading_enabled)
       g_execution_engine.Execute(plan);
   }
 
