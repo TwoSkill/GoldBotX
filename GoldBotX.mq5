@@ -48,6 +48,7 @@ CGBXTradeManager      g_trade_manager;
 CGBXMemoryEngine      g_memory_engine;
 CGBXReportEngine      g_report_engine;
 GBXConfig             g_config;
+datetime              g_last_analysis_bar = 0;
 
 void BuildConfiguration(GBXConfig &config)
   {
@@ -128,8 +129,14 @@ void OnDeinit(const int reason)
 
 void RefreshAnalysisPipeline(void)
   {
+   const datetime current_bar = iTime(_Symbol,InpPrimaryTimeframe,0);
+   if(current_bar == 0 || current_bar == g_last_analysis_bar)
+      return;
+
    if(!g_data.Refresh())
       return;
+
+   g_last_analysis_bar = current_bar;
 
    GBXDataSnapshot data = g_data.GetSnapshot();
    if(!g_features.Refresh(data))
