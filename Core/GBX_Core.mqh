@@ -107,7 +107,7 @@ public:
       m_logger.Info(StringFormat("Core initialized for %s (%s).",
                                  m_config.symbol,
                                  EnumToString(m_config.primary_timeframe)));
-      m_logger.Info("Trading is disabled until a decision and risk pipeline is available.");
+      m_logger.Info("Decision, risk and execution pipelines are ready; trading remains disabled by configuration.");
       return true;
      }
 
