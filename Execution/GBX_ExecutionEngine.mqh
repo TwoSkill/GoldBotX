@@ -9,11 +9,13 @@ class CGBXExecutionEngine
 private:
    GBXConfig m_config;
    CTrade    m_trade;
+   datetime  m_last_execution_bar;
 
 public:
    CGBXExecutionEngine(void)
      {
       GBXInitializeConfig(m_config);
+      m_last_execution_bar=0;
      }
 
    bool Initialize(const GBXConfig &config)
@@ -29,11 +31,19 @@ public:
       if(!m_config.trading_enabled || plan.volume<=0.0)
          return false;
 
+      const datetime current_bar=iTime(m_config.symbol,m_config.primary_timeframe,0);
+      if(current_bar==0 || current_bar==m_last_execution_bar)
+         return false;
+
+      bool executed=false;
       if(plan.action==GBX_ACTION_BUY)
-         return m_trade.Buy(plan.volume,m_config.symbol,0.0,plan.stop_loss,plan.take_profit,"GoldBot X");
-      if(plan.action==GBX_ACTION_SELL)
-         return m_trade.Sell(plan.volume,m_config.symbol,0.0,plan.stop_loss,plan.take_profit,"GoldBot X");
-      return false;
+         executed=m_trade.Buy(plan.volume,m_config.symbol,0.0,plan.stop_loss,plan.take_profit,"GoldBot X");
+      else if(plan.action==GBX_ACTION_SELL)
+         executed=m_trade.Sell(plan.volume,m_config.symbol,0.0,plan.stop_loss,plan.take_profit,"GoldBot X");
+
+      if(executed)
+         m_last_execution_bar=current_bar;
+      return executed;
      }
 
    string LastResult(void) const
