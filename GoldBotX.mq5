@@ -3,6 +3,7 @@
 #property strict
 
 #include "Core/GBX_Core.mqh"
+#include "Core/GBX_Diagnostics.mqh"
 #include "Data/GBX_DataEngine.mqh"
 #include "Feature/GBX_FeatureEngine.mqh"
 #include "Analyzer/GBX_AnalyzerEngine.mqh"
@@ -20,6 +21,7 @@ input long            InpMagicNumber             = 26080501;
 input ENUM_TIMEFRAMES InpPrimaryTimeframe        = PERIOD_M5;
 input ENUM_TIMEFRAMES InpContextTimeframe        = PERIOD_H1;
 input bool            InpEnableTrading           = false;
+input bool            InpDryRun                  = true;
 input bool            InpDebugLogging            = false;
 input int             InpMaxSpreadPoints         = 50;
 
@@ -35,7 +37,8 @@ input bool                  InpAllowHedging            = false;
 input double                InpMinQualityScore         = 70.0;
 input double                InpMinConfidence           = 65.0;
 
-CGBXCore       g_core;
+CGBXCore          g_core;
+CGBXDiagnostics   g_diagnostics;
 CGBXDataEngine    g_data;
 CGBXFeatureEngine  g_features;
 CGBXAnalyzerEngine   g_analyzers;
@@ -58,6 +61,7 @@ void BuildConfiguration(GBXConfig &config)
    config.context_timeframe           = InpContextTimeframe;
    config.magic_number                = InpMagicNumber;
    config.trading_enabled             = InpEnableTrading;
+   config.dry_run                     = InpDryRun;
    config.debug_logging               = InpDebugLogging;
    config.risk_profile                = InpRiskProfile;
    config.risk_per_trade_percent      = InpRiskPerTradePercent;
@@ -78,6 +82,8 @@ int OnInit()
 
    if(!g_core.Initialize(g_config))
       return INIT_FAILED;
+
+   g_diagnostics.Initialize(g_config);
 
    if(!g_data.Initialize(g_config))
      {
@@ -136,8 +142,6 @@ void RefreshAnalysisPipeline(void)
    if(!g_data.Refresh())
       return;
 
-   g_last_analysis_bar = current_bar;
-
    GBXDataSnapshot data = g_data.GetSnapshot();
    if(!g_features.Refresh(data))
       return;
@@ -157,14 +161,20 @@ void RefreshAnalysisPipeline(void)
    g_decision_engine.Refresh(market,strategy);
 
    GBXDecision decision = g_decision_engine.GetDecision();
+   g_diagnostics.MarketDecision(decision,market,data);
    g_memory_engine.RecordDecision(decision,market,data.primary_bar.time);
    g_report_engine.UpdateDailyReport(market);
    g_trade_manager.Manage(data,market);
 
    GBXTradePlan plan;
-   if(g_risk_manager.BuildTradePlan(decision,market,data,plan) &&
-      g_config.trading_enabled)
+   if(g_risk_manager.BuildTradePlan(decision,market,data,plan))
+     {
       g_execution_engine.Execute(plan);
+      g_diagnostics.ExecutionResult(g_execution_engine.LastResult());
+     }
+
+   // Mark the bar only after the complete pipeline has run successfully.
+   g_last_analysis_bar = current_bar;
   }
 
 void OnTick()
