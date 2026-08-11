@@ -8,6 +8,7 @@
 class CGBXDiagnostics
   {
 private:
+   GBXConfig  m_config;
    CGBXLogger m_logger;
    string     m_last_reason;
    string     m_last_execution;
@@ -15,12 +16,14 @@ private:
 public:
    CGBXDiagnostics(void)
      {
+      GBXInitializeConfig(m_config);
       m_last_reason="";
       m_last_execution="";
      }
 
    void Initialize(const GBXConfig &config)
      {
+      m_config=config;
       m_logger.Configure(config.debug_logging);
       m_last_reason="";
       m_last_execution="";
@@ -31,9 +34,17 @@ public:
                        const GBXDataSnapshot &data)
      {
       m_last_reason=decision.reason;
-      m_logger.Info(StringFormat("MARKET DECISION symbol=%s tf=%s regime=%s direction=%s quality=%.2f confidence=%.2f spread=%.1f risk_multiplier=%.2f decision=%s reason=%s",
+      string targets="";
+      if(decision.has_price_targets)
+         targets=StringFormat(" sl=%.5f tp=%.5f rr=%.2f",
+                              decision.preferred_stop_loss,
+                              decision.preferred_take_profit,
+                              decision.preferred_reward_risk);
+
+      m_logger.Info(StringFormat("MARKET DECISION symbol=%s tf=%s session=%s regime=%s direction=%s quality=%.2f confidence=%.2f spread=%.1f risk_multiplier=%.2f decision=%s reason=%s%s",
                                  _Symbol,
-                                 EnumToString(PERIOD_CURRENT),
+                                 EnumToString(m_config.primary_timeframe),
+                                 EnumToString(market.session),
                                  EnumToString(market.regime),
                                  EnumToString(market.direction),
                                  market.quality,
@@ -41,7 +52,8 @@ public:
                                  data.quote.spread_points,
                                  market.risk_multiplier,
                                  EnumToString(decision.action),
-                                 decision.reason));
+                                 decision.reason,
+                                 targets));
      }
 
    void TradePlanRejected(const GBXTradePlan &plan,const string reason)
