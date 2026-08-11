@@ -70,12 +70,13 @@ private:
          regime == GBX_REGIME_HIGH_VOLATILITY)
          return 0.0;
 
-      if(quality >= 90.0 && confidence >= 90.0)
+      // A: strong signal; B: valid signal with reduced risk.
+      if(quality >= 90.0 && confidence >= 85.0)
          return 1.0;
-      if(quality >= 80.0 && confidence >= 80.0)
-         return 0.80;
-      if(quality >= 70.0 && confidence >= 70.0)
-         return 0.60;
+      if(quality >= 80.0 && confidence >= 75.0)
+         return 0.75;
+      if(quality >= m_config.min_quality_score && confidence >= m_config.min_confidence)
+         return 0.45;
       return 0.0;
      }
 
