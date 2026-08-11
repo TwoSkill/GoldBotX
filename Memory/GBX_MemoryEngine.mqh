@@ -31,7 +31,12 @@ public:
       if(handle==INVALID_HANDLE)
          return;
 
+      const bool write_header=(FileSize(handle)==0);
       FileSeek(handle,0,SEEK_END);
+
+      if(write_header)
+         FileWrite(handle,"time","symbol","action","strategy","confidence","quality","regime","session","sl","tp","rr","reason");
+
       FileWrite(handle,TimeToString(TimeCurrent(),TIME_DATE|TIME_SECONDS),
                 m_config.symbol,
                 EnumToString(decision.action),
@@ -39,6 +44,10 @@ public:
                 DoubleToString(decision.confidence,2),
                 DoubleToString(decision.quality,2),
                 EnumToString(market.regime),
+                EnumToString(market.session),
+                DoubleToString(decision.preferred_stop_loss,5),
+                DoubleToString(decision.preferred_take_profit,5),
+                DoubleToString(decision.preferred_reward_risk,2),
                 decision.reason);
       FileClose(handle);
       m_last_recorded_bar=bar_time;
