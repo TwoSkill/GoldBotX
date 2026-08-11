@@ -1,5 +1,5 @@
 #property copyright "GoldBot X"
-#property version   "0.2.1"
+#property version   "0.2.2"
 #property strict
 
 #include "Core/GBX_Core.mqh"
@@ -9,6 +9,7 @@
 #include "Analyzer/GBX_AnalyzerEngine.mqh"
 #include "Classifier/GBX_MarketClassifier.mqh"
 #include "Strategy/GBX_StrategySelector.mqh"
+#include "Strategy/GBX_RangeStrategy.mqh"
 #include "Decision/GBX_DecisionEngine.mqh"
 #include "Risk/GBX_RiskManager.mqh"
 #include "Execution/GBX_ExecutionEngine.mqh"
@@ -45,6 +46,7 @@ CGBXFeatureEngine  g_features;
 CGBXAnalyzerEngine   g_analyzers;
 CGBXMarketClassifier g_classifier;
 CGBXStrategySelector  g_strategy_selector;
+CGBXRangeStrategy     g_range_strategy;
 CGBXDecisionEngine    g_decision_engine;
 CGBXRiskManager       g_risk_manager;
 CGBXExecutionEngine   g_execution_engine;
@@ -114,10 +116,10 @@ int OnInit()
       return INIT_FAILED;
      }
 
-   if(!g_strategy_selector.Initialize(g_config) || !g_decision_engine.Initialize(g_config) ||
-      !g_risk_manager.Initialize(g_config) || !g_execution_engine.Initialize(g_config) ||
-      !g_trade_manager.Initialize(g_config) || !g_memory_engine.Initialize(g_config) ||
-      !g_report_engine.Initialize(g_config))
+   if(!g_strategy_selector.Initialize(g_config) || !g_range_strategy.Initialize(g_config) ||
+      !g_decision_engine.Initialize(g_config) || !g_risk_manager.Initialize(g_config) ||
+      !g_execution_engine.Initialize(g_config) || !g_trade_manager.Initialize(g_config) ||
+      !g_memory_engine.Initialize(g_config) || !g_report_engine.Initialize(g_config))
      {
       g_data.Shutdown();
       g_core.Shutdown(REASON_INITFAILED);
@@ -164,6 +166,8 @@ void RefreshAnalysisPipeline(void)
    g_decision_engine.Refresh(market,strategy);
 
    GBXDecision decision = g_decision_engine.GetDecision();
+   g_range_strategy.Refresh(data,market,strategy,decision);
+
    g_diagnostics.MarketDecision(decision,market,data);
    g_memory_engine.RecordDecision(decision,market,data.primary_bar.time);
    g_report_engine.UpdateDailyReport(market);
@@ -174,6 +178,10 @@ void RefreshAnalysisPipeline(void)
      {
       g_execution_engine.Execute(plan);
       g_diagnostics.ExecutionResult(g_execution_engine.LastResult());
+     }
+   else if(decision.action==GBX_ACTION_BUY || decision.action==GBX_ACTION_SELL)
+     {
+      g_diagnostics.TradePlanRejected(plan,g_risk_manager.LastReason());
      }
 
    g_panel.Update(g_config,data,market,decision,g_execution_engine.LastResult());
