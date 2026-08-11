@@ -10,6 +10,7 @@ struct GBXConfig
    ENUM_TIMEFRAMES       context_timeframe;
    long                  magic_number;
    bool                  trading_enabled;
+   bool                  dry_run;
    bool                  debug_logging;
    ENUM_GBX_RISK_PROFILE risk_profile;
    double                risk_per_trade_percent;
@@ -90,6 +91,7 @@ void GBXInitializeConfig(GBXConfig &config)
    config.context_timeframe           = PERIOD_H1;
    config.magic_number                = 26080501;
    config.trading_enabled             = false;
+   config.dry_run                     = true;
    config.debug_logging               = false;
    config.risk_profile                = GBX_RISK_BALANCED;
    config.risk_per_trade_percent      = 0.50;
