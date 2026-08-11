@@ -34,6 +34,22 @@ private:
       return true;
      }
 
+   bool ReadOptionalIndicatorValue(const int handle,const int buffer,double &value)
+     {
+      double values[];
+      ArraySetAsSeries(values,true);
+      value=0.0;
+
+      if(handle == INVALID_HANDLE || CopyBuffer(handle,buffer,1,1,values) != 1)
+         return true;
+
+      if(values[0] == EMPTY_VALUE)
+         value=0.0;
+      else
+         value=values[0];
+      return true;
+     }
+
    void BuildBarData(const MqlRates &rate,GBXBarData &bar)
      {
       bar.time        = rate.time;
@@ -96,8 +112,8 @@ private:
              ReadIndicatorValue(m_ema_fast_handle,0,m_snapshot.indicators.ema_fast) &&
              ReadIndicatorValue(m_ema_slow_handle,0,m_snapshot.indicators.ema_slow) &&
              ReadIndicatorValue(m_sma_handle,0,m_snapshot.indicators.sma) &&
-             ReadIndicatorValue(m_fractals_handle,0,m_snapshot.indicators.fractal_high) &&
-             ReadIndicatorValue(m_fractals_handle,1,m_snapshot.indicators.fractal_low);
+             ReadOptionalIndicatorValue(m_fractals_handle,0,m_snapshot.indicators.fractal_high) &&
+             ReadOptionalIndicatorValue(m_fractals_handle,1,m_snapshot.indicators.fractal_low);
      }
 
    void ReleaseHandle(int &handle)
