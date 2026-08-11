@@ -51,14 +51,21 @@ public:
 
       const string trading=(config.trading_enabled ? "ENABLED" : "DISABLED");
       const string dry_run=(config.dry_run ? "ON" : "OFF");
+      string targets="";
+      if(decision.has_price_targets)
+         targets=StringFormat("\nTargets: SL %.5f   TP %.5f   RR %.2f",
+                              decision.preferred_stop_loss,
+                              decision.preferred_take_profit,
+                              decision.preferred_reward_risk);
+
       const string text=StringFormat(
-         "GoldBot X\nTrading: %s   Dry Run: %s\nSymbol: %s   TF: %s\nSpread: %.1f\nRegime: %s\nDirection: %s\nQuality: %.1f   Confidence: %.1f\nRisk multiplier: %.2f   ATR: %.5f\nOpen positions: %d/%d\nSignal: %s\nReason: %s\nExecution: %s",
+         "GoldBot X\nTrading: %s   Dry Run: %s\nSymbol: %s   TF: %s\nSpread: %.1f\nSession: %s\nRegime: %s\nDirection: %s\nQuality: %.1f   Confidence: %.1f\nRisk multiplier: %.2f   ATR: %.5f\nOpen positions: %d/%d\nSignal: %s%s\nReason: %s\nExecution: %s",
          trading,dry_run,config.symbol,EnumToString(config.primary_timeframe),
-         data.quote.spread_points,EnumToString(market.regime),
+         data.quote.spread_points,EnumToString(market.session),EnumToString(market.regime),
          EnumToString(market.direction),market.quality,market.confidence,
          market.risk_multiplier,data.indicators.atr,
          OpenPositions(config),config.max_open_positions,
-         EnumToString(decision.action),decision.reason,last_execution);
+         EnumToString(decision.action),targets,decision.reason,last_execution);
 
       ObjectSetString(0,m_name,OBJPROP_TEXT,text);
       ObjectSetInteger(0,m_name,OBJPROP_COLOR,(config.trading_enabled ? clrLime : clrOrange));
