@@ -10,6 +10,13 @@ private:
    GBXConfig m_config;
    datetime  m_risk_day;
    double    m_day_start_equity;
+   string    m_last_reason;
+
+   bool Reject(const string reason)
+     {
+      m_last_reason=reason;
+      return false;
+     }
 
    bool DailyLossLimitReached(void)
      {
@@ -93,6 +100,7 @@ public:
       GBXInitializeConfig(m_config);
       m_risk_day=0;
       m_day_start_equity=0.0;
+      m_last_reason="";
      }
 
    bool Initialize(const GBXConfig &config)
@@ -100,6 +108,7 @@ public:
       m_config=config;
       m_risk_day=StringToTime(TimeToString(TimeCurrent(),TIME_DATE));
       m_day_start_equity=AccountInfoDouble(ACCOUNT_EQUITY);
+      m_last_reason="";
       return true;
      }
 
@@ -109,47 +118,89 @@ public:
                        GBXTradePlan &plan)
      {
       GBXInitializeTradePlan(plan);
+      m_last_reason="";
 
       if(decision.action!=GBX_ACTION_BUY && decision.action!=GBX_ACTION_SELL)
-         return false;
+         return Reject("Risk plan skipped: decision is not BUY or SELL.");
       if(DailyLossLimitReached())
-         return false;
+         return Reject("Risk plan rejected: daily loss limit reached.");
 
       const int open_positions=OpenPositionsCount();
       if(open_positions>=m_config.max_open_positions)
-         return false;
-      if(open_positions>0 && (!m_config.allow_pyramiding || !market.can_add_position))
-         return false;
+         return Reject("Risk plan rejected: maximum open positions reached.");
+      if(open_positions>0 && !m_config.allow_pyramiding)
+         return Reject("Risk plan rejected: pyramiding is disabled.");
+      if(open_positions>0 && !market.can_add_position)
+         return Reject("Risk plan rejected: market quality does not allow adding another position.");
 
       double risk_percent=MathMin(m_config.max_risk_per_trade_percent,
                                   m_config.risk_per_trade_percent*market.risk_multiplier*ProfileMultiplier());
       const double remaining_budget=m_config.max_aggregate_risk_percent-
                                    open_positions*m_config.max_risk_per_trade_percent;
       risk_percent=MathMin(risk_percent,remaining_budget);
-      if(risk_percent<=0.0 || data.indicators.atr<=0.0)
-         return false;
+      if(risk_percent<=0.0)
+         return Reject("Risk plan rejected: aggregate risk budget is exhausted.");
 
       plan.action=decision.action;
       plan.is_addition=open_positions>0;
       plan.risk_percent=risk_percent;
       plan.entry_price=(decision.action==GBX_ACTION_BUY ? data.quote.ask : data.quote.bid);
 
-      const double stop_distance=MathMax(data.indicators.atr*0.75,data.primary_bar.range*1.10);
-      if(decision.action==GBX_ACTION_BUY)
+      const bool use_strategy_targets=(decision.has_price_targets &&
+                                       decision.preferred_stop_loss>0.0 &&
+                                       decision.preferred_take_profit>0.0);
+
+      if(use_strategy_targets)
         {
-         plan.stop_loss=MathMin(data.primary_bar.low,data.primary_bar.close)-stop_distance;
-         plan.take_profit=plan.entry_price+(plan.entry_price-plan.stop_loss)*2.20;
+         plan.stop_loss=decision.preferred_stop_loss;
+         plan.take_profit=decision.preferred_take_profit;
+
+         if(decision.action==GBX_ACTION_BUY && (plan.stop_loss>=plan.entry_price || plan.take_profit<=plan.entry_price))
+            return Reject("Risk plan rejected: strategy BUY targets are not valid around current entry.");
+         if(decision.action==GBX_ACTION_SELL && (plan.stop_loss<=plan.entry_price || plan.take_profit>=plan.entry_price))
+            return Reject("Risk plan rejected: strategy SELL targets are not valid around current entry.");
+
+         const double risk_distance=MathAbs(plan.entry_price-plan.stop_loss);
+         const double reward_distance=MathAbs(plan.take_profit-plan.entry_price);
+         if(risk_distance<=0.0 || reward_distance<=0.0)
+            return Reject("Risk plan rejected: strategy target distances are invalid.");
+
+         plan.planned_reward_risk=reward_distance/risk_distance;
+         if(plan.planned_reward_risk<1.10)
+            return Reject("Risk plan rejected: strategy reward/risk is too low.");
         }
       else
         {
-         plan.stop_loss=MathMax(data.primary_bar.high,data.primary_bar.close)+stop_distance;
-         plan.take_profit=plan.entry_price-(plan.stop_loss-plan.entry_price)*2.20;
+         if(data.indicators.atr<=0.0)
+            return Reject("Risk plan rejected: ATR is not available for dynamic stop calculation.");
+
+         const double stop_distance=MathMax(data.indicators.atr*0.75,data.primary_bar.range*1.10);
+         if(decision.action==GBX_ACTION_BUY)
+           {
+            plan.stop_loss=MathMin(data.primary_bar.low,data.primary_bar.close)-stop_distance;
+            plan.take_profit=plan.entry_price+(plan.entry_price-plan.stop_loss)*2.20;
+           }
+         else
+           {
+            plan.stop_loss=MathMax(data.primary_bar.high,data.primary_bar.close)+stop_distance;
+            plan.take_profit=plan.entry_price-(plan.stop_loss-plan.entry_price)*2.20;
+           }
+
+         plan.planned_reward_risk=2.20;
         }
 
-      plan.planned_reward_risk=2.20;
       plan.volume=CalculateVolume(plan.entry_price,plan.stop_loss,plan.risk_percent);
+      if(plan.volume<=0.0)
+         return Reject("Risk plan rejected: calculated volume is below broker minimum for the configured risk.");
+
       plan.rationale=decision.reason;
-      return plan.volume>0.0;
+      m_last_reason="Risk plan accepted.";
+      return true;
+     }
+
+   string LastReason(void) const
+     {
+      return m_last_reason;
      }
   };
 
