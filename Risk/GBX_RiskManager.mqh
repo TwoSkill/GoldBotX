@@ -28,6 +28,27 @@ private:
       return loss_percent>=m_config.daily_loss_limit_percent;
      }
 
+   double ProfileMultiplier(void) const
+     {
+      if(m_config.risk_profile==GBX_RISK_CONSERVATIVE)
+         return 0.70;
+      if(m_config.risk_profile==GBX_RISK_AGGRESSIVE)
+         return 1.20;
+      return 1.00;
+     }
+
+   int VolumeDigits(const double step) const
+     {
+      double value=step;
+      int digits=0;
+      while(value<1.0 && digits<8)
+        {
+         value*=10.0;
+         digits++;
+        }
+      return digits;
+     }
+
    int OpenPositionsCount(void) const
      {
       int count=0;
@@ -43,8 +64,8 @@ private:
 
    double CalculateVolume(const double entry,const double stop,const double risk_percent) const
      {
-      const double balance    = AccountInfoDouble(ACCOUNT_BALANCE);
-      const double risk_money = balance*risk_percent/100.0;
+      const double equity     = AccountInfoDouble(ACCOUNT_EQUITY);
+      const double risk_money = equity*risk_percent/100.0;
       const double tick_size  = SymbolInfoDouble(m_config.symbol,SYMBOL_TRADE_TICK_SIZE);
       const double tick_value = SymbolInfoDouble(m_config.symbol,SYMBOL_TRADE_TICK_VALUE);
       const double step       = SymbolInfoDouble(m_config.symbol,SYMBOL_VOLUME_STEP);
@@ -63,7 +84,7 @@ private:
          return 0.0;
 
       volume=MathMin(maximum,volume);
-      return NormalizeDouble(volume,2);
+      return NormalizeDouble(volume,VolumeDigits(step));
      }
 
 public:
@@ -101,7 +122,7 @@ public:
          return false;
 
       double risk_percent=MathMin(m_config.max_risk_per_trade_percent,
-                                  m_config.risk_per_trade_percent*market.risk_multiplier);
+                                  m_config.risk_per_trade_percent*market.risk_multiplier*ProfileMultiplier());
       const double remaining_budget=m_config.max_aggregate_risk_percent-
                                    open_positions*m_config.max_risk_per_trade_percent;
       risk_percent=MathMin(risk_percent,remaining_budget);
