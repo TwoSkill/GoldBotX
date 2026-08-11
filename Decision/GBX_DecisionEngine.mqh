@@ -40,6 +40,8 @@ public:
 
    bool Refresh(const GBXMarketState &market,const GBXStrategySelection &selection)
      {
+      GBXInitializeDecision(m_decision);
+
       if(!market.is_tradeable)
         {
          SetWait(market,selection,"WAIT: market is not currently tradeable.");
