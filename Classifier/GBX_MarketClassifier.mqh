@@ -19,6 +19,39 @@ private:
       return MathMax(0.0,MathMin(100.0,value));
      }
 
+   ENUM_GBX_SESSION DetermineSession(void) const
+     {
+      MqlDateTime dt;
+      TimeToStruct(TimeCurrent(),dt);
+      const int hour=dt.hour;
+
+      if(hour>=13 && hour<17)
+         return GBX_SESSION_OVERLAP;
+      if(hour>=7 && hour<13)
+         return GBX_SESSION_LONDON;
+      if(hour>=17 && hour<22)
+         return GBX_SESSION_NEW_YORK;
+      if(hour>=0 && hour<7)
+         return GBX_SESSION_ASIA;
+      return GBX_SESSION_NONE;
+     }
+
+   double DetermineLiquidityScore(const ENUM_GBX_SESSION session,
+                                  const GBXFeatureSnapshot &features) const
+     {
+      double session_score=45.0;
+      if(session==GBX_SESSION_OVERLAP)
+         session_score=100.0;
+      else if(session==GBX_SESSION_LONDON)
+         session_score=90.0;
+      else if(session==GBX_SESSION_NEW_YORK)
+         session_score=85.0;
+      else if(session==GBX_SESSION_ASIA)
+         session_score=68.0;
+
+      return ClampScore(session_score*0.70+features.spread_quality*0.30);
+     }
+
    bool IsStrongAlignedTrend(const GBXFeatureSnapshot &features,
                              const GBXAnalysisSnapshot &analysis) const
      {
@@ -107,28 +140,31 @@ public:
         }
 
       m_state.direction = analysis.trend.direction;
-      m_state.session   = GBX_SESSION_NONE;
+      m_state.session   = DetermineSession();
       m_state.regime    = DetermineRegime(features,analysis);
 
       m_state.trend_score      = analysis.trend.score;
       m_state.structure_score  = analysis.structure.score;
       m_state.momentum_score   = features.momentum_score;
       m_state.volatility_score = analysis.volatility.score;
-      m_state.liquidity_score  = 0.0;
+      m_state.liquidity_score  = DetermineLiquidityScore(m_state.session,features);
 
       m_state.quality = ClampScore(
-         analysis.trend.score*0.30 +
-         analysis.structure.score*0.25 +
-         features.momentum_score*0.20 +
-         features.spread_quality*0.15 +
-         features.candle_quality*0.10);
+         analysis.trend.score*0.28 +
+         analysis.structure.score*0.23 +
+         features.momentum_score*0.19 +
+         features.spread_quality*0.10 +
+         features.candle_quality*0.10 +
+         m_state.liquidity_score*0.10);
 
       const double alignment_bonus = features.primary_context_aligned ? 10.0 : 0.0;
+      const double liquidity_bonus = m_state.liquidity_score >= 80.0 ? 5.0 : 0.0;
       m_state.confidence = ClampScore(
-         features.preliminary_quality*0.40 +
+         features.preliminary_quality*0.38 +
          analysis.trend.score*0.30 +
          analysis.structure.score*0.20 +
-         alignment_bonus);
+         alignment_bonus +
+         liquidity_bonus);
 
       const bool permitted_regime =
          m_state.regime == GBX_REGIME_BULLISH_TREND ||
@@ -138,7 +174,8 @@ public:
 
       m_state.is_tradeable = permitted_regime &&
                              m_state.quality >= m_config.min_quality_score &&
-                             m_state.confidence >= m_config.min_confidence;
+                             m_state.confidence >= m_config.min_confidence &&
+                             m_state.liquidity_score >= 55.0;
 
       if(m_state.regime == GBX_REGIME_UNTRADEABLE)
          m_state.favorability = GBX_FAVORABILITY_BLOCKED;
@@ -154,9 +191,14 @@ public:
       m_state.risk_multiplier = DetermineRiskMultiplier(m_state.regime,
                                                          m_state.quality,
                                                          m_state.confidence);
+
+      const bool addable_trend=IsStrongAlignedTrend(features,analysis);
+      const bool addable_range=m_state.regime==GBX_REGIME_CLEAN_RANGE &&
+                               m_state.quality>=85.0 &&
+                               m_state.confidence>=80.0 &&
+                               m_state.risk_multiplier>=0.75;
       m_state.can_add_position = m_state.is_tradeable &&
-                                 m_state.risk_multiplier >= 0.80 &&
-                                 IsStrongAlignedTrend(features,analysis);
+                                 (addable_trend || addable_range);
       return true;
      }
 
