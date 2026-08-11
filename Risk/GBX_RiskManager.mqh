@@ -18,6 +18,37 @@ private:
       return false;
      }
 
+   string RiskDayKey(void) const
+     {
+      return StringFormat("GBX_%s_%I64d_risk_day",m_config.symbol,m_config.magic_number);
+     }
+
+   string RiskEquityKey(void) const
+     {
+      return StringFormat("GBX_%s_%I64d_day_equity",m_config.symbol,m_config.magic_number);
+     }
+
+   void StoreDailyRiskState(void) const
+     {
+      GlobalVariableSet(RiskDayKey(),(double)m_risk_day);
+      GlobalVariableSet(RiskEquityKey(),m_day_start_equity);
+     }
+
+   bool LoadDailyRiskState(const datetime today)
+     {
+      if(!GlobalVariableCheck(RiskDayKey()) || !GlobalVariableCheck(RiskEquityKey()))
+         return false;
+
+      const datetime saved_day=(datetime)GlobalVariableGet(RiskDayKey());
+      const double saved_equity=GlobalVariableGet(RiskEquityKey());
+      if(saved_day!=today || saved_equity<=0.0)
+         return false;
+
+      m_risk_day=saved_day;
+      m_day_start_equity=saved_equity;
+      return true;
+     }
+
    bool DailyLossLimitReached(void)
      {
       const datetime today=StringToTime(TimeToString(TimeCurrent(),TIME_DATE));
@@ -25,6 +56,7 @@ private:
         {
          m_risk_day=today;
          m_day_start_equity=AccountInfoDouble(ACCOUNT_EQUITY);
+         StoreDailyRiskState();
         }
 
       if(m_day_start_equity<=0.0)
@@ -69,6 +101,24 @@ private:
       return count;
      }
 
+   bool HasOppositePosition(const ENUM_GBX_ACTION action) const
+     {
+      for(int i=0;i<PositionsTotal();i++)
+        {
+         if(PositionGetSymbol(i) != m_config.symbol)
+            continue;
+         if(PositionGetInteger(POSITION_MAGIC) != m_config.magic_number)
+            continue;
+
+         const long position_type=PositionGetInteger(POSITION_TYPE);
+         if(action==GBX_ACTION_BUY && position_type==POSITION_TYPE_SELL)
+            return true;
+         if(action==GBX_ACTION_SELL && position_type==POSITION_TYPE_BUY)
+            return true;
+        }
+      return false;
+     }
+
    double CalculateVolume(const double entry,const double stop,const double risk_percent) const
      {
       const double equity     = AccountInfoDouble(ACCOUNT_EQUITY);
@@ -106,8 +156,13 @@ public:
    bool Initialize(const GBXConfig &config)
      {
       m_config=config;
-      m_risk_day=StringToTime(TimeToString(TimeCurrent(),TIME_DATE));
-      m_day_start_equity=AccountInfoDouble(ACCOUNT_EQUITY);
+      const datetime today=StringToTime(TimeToString(TimeCurrent(),TIME_DATE));
+      if(!LoadDailyRiskState(today))
+        {
+         m_risk_day=today;
+         m_day_start_equity=AccountInfoDouble(ACCOUNT_EQUITY);
+         StoreDailyRiskState();
+        }
       m_last_reason="";
       return true;
      }
@@ -128,6 +183,8 @@ public:
       const int open_positions=OpenPositionsCount();
       if(open_positions>=m_config.max_open_positions)
          return Reject("Risk plan rejected: maximum open positions reached.");
+      if(!m_config.allow_hedging && HasOppositePosition(decision.action))
+         return Reject("Risk plan rejected: opposite position exists and hedging is disabled.");
       if(open_positions>0 && !m_config.allow_pyramiding)
          return Reject("Risk plan rejected: pyramiding is disabled.");
       if(open_positions>0 && !market.can_add_position)
