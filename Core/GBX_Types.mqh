@@ -69,6 +69,10 @@ struct GBXDecision
    double            confidence;
    double            quality;
    string            reason;
+   bool              has_price_targets;
+   double            preferred_stop_loss;
+   double            preferred_take_profit;
+   double            preferred_reward_risk;
   };
 
 struct GBXTradePlan
@@ -145,11 +149,15 @@ void GBXInitializeStrategySelection(GBXStrategySelection &selection)
 
 void GBXInitializeDecision(GBXDecision &decision)
   {
-   decision.action     = GBX_ACTION_WAIT;
-   decision.strategy   = GBX_STRATEGY_WAIT;
-   decision.confidence = 0.0;
-   decision.quality    = 0.0;
-   decision.reason     = "";
+   decision.action                = GBX_ACTION_WAIT;
+   decision.strategy              = GBX_STRATEGY_WAIT;
+   decision.confidence            = 0.0;
+   decision.quality               = 0.0;
+   decision.reason                = "";
+   decision.has_price_targets     = false;
+   decision.preferred_stop_loss   = 0.0;
+   decision.preferred_take_profit = 0.0;
+   decision.preferred_reward_risk = 0.0;
   }
 
 void GBXInitializeTradePlan(GBXTradePlan &plan)
