@@ -15,6 +15,7 @@
 #include "Trade/GBX_TradeManager.mqh"
 #include "Memory/GBX_MemoryEngine.mqh"
 #include "Reports/GBX_ReportEngine.mqh"
+#include "Reports/GBX_Panel.mqh"
 
 input group "GoldBot X — Core"
 input long            InpMagicNumber             = 26080501;
@@ -50,6 +51,7 @@ CGBXExecutionEngine   g_execution_engine;
 CGBXTradeManager      g_trade_manager;
 CGBXMemoryEngine      g_memory_engine;
 CGBXReportEngine      g_report_engine;
+CGBXPanel             g_panel;
 GBXConfig             g_config;
 datetime              g_last_analysis_bar = 0;
 
@@ -129,6 +131,7 @@ int OnInit()
 void OnDeinit(const int reason)
   {
    EventKillTimer();
+   g_panel.Remove();
    g_data.Shutdown();
    g_core.Shutdown(reason);
   }
@@ -172,6 +175,8 @@ void RefreshAnalysisPipeline(void)
       g_execution_engine.Execute(plan);
       g_diagnostics.ExecutionResult(g_execution_engine.LastResult());
      }
+
+   g_panel.Update(g_config,data,market,decision,g_execution_engine.LastResult());
 
    // Mark the bar only after the complete pipeline has run successfully.
    g_last_analysis_bar = current_bar;
