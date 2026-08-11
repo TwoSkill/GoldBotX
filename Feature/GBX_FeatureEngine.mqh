@@ -31,6 +31,17 @@ private:
       return GBX_DIRECTION_NEUTRAL;
      }
 
+   ENUM_GBX_DIRECTION CandleDirection(const GBXBarData &bar) const
+     {
+      if(bar.range<=0.0 || bar.body/bar.range<0.10)
+         return GBX_DIRECTION_NEUTRAL;
+      if(bar.close>bar.open)
+         return GBX_DIRECTION_BULLISH;
+      if(bar.close<bar.open)
+         return GBX_DIRECTION_BEARISH;
+      return GBX_DIRECTION_NEUTRAL;
+     }
+
    double CalculateTrendStrength(const GBXDataSnapshot &data) const
      {
       if(data.indicators.atr <= 0.0)
@@ -88,10 +99,11 @@ public:
          (m_features.directional_bias == GBX_DIRECTION_BULLISH && data.indicators.plus_di > data.indicators.minus_di) ||
          (m_features.directional_bias == GBX_DIRECTION_BEARISH && data.indicators.minus_di > data.indicators.plus_di);
 
-      const bool primary_bullish = data.primary_bar.close > data.primary_bar.open;
-      const bool context_bullish = data.context_bar.close > data.context_bar.open;
+      const ENUM_GBX_DIRECTION primary_direction=CandleDirection(data.primary_bar);
+      const ENUM_GBX_DIRECTION context_direction=CandleDirection(data.context_bar);
       m_features.primary_context_aligned =
-         (primary_bullish && context_bullish) || (!primary_bullish && !context_bullish);
+         primary_direction!=GBX_DIRECTION_NEUTRAL &&
+         primary_direction==context_direction;
 
       m_features.spread_acceptable = data.quote.spread_points <= m_config.max_spread_points;
       if(m_config.max_spread_points > 0)
