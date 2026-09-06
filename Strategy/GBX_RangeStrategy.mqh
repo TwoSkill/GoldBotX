@@ -22,12 +22,13 @@ private:
                 const string reason)
      {
       GBXInitializeDecision(decision);
-      decision.action     = GBX_ACTION_WAIT;
-      decision.strategy   = selection.strategy;
-      decision.confidence = market.confidence;
-      decision.quality    = market.quality;
-      decision.reason     = reason;
-      m_last_reason       = reason;
+      decision.action       = GBX_ACTION_WAIT;
+      decision.strategy     = selection.strategy;
+      decision.signal_class = market.signal_class;
+      decision.confidence   = market.confidence;
+      decision.quality      = market.quality;
+      decision.reason       = reason;
+      m_last_reason         = reason;
      }
 
    bool FindRange(double &support,double &resistance)
@@ -105,9 +106,9 @@ public:
       if(selection.strategy!=GBX_STRATEGY_RANGE_SCALPING)
          return true;
 
-      if(!market.is_tradeable)
+      if(!market.is_tradeable || market.signal_class==GBX_SIGNAL_C)
         {
-         SetWait(decision,market,selection,"WAIT: range strategy blocked because market is not tradeable.");
+         SetWait(decision,market,selection,"WAIT: range strategy blocked because signal class is C or market is not tradeable.");
          return true;
         }
 
@@ -182,6 +183,7 @@ public:
       GBXInitializeDecision(decision);
       decision.action                = action;
       decision.strategy              = selection.strategy;
+      decision.signal_class          = market.signal_class;
       decision.confidence            = MathMin(95.0,MathMax(market.confidence,selection.score)+3.0);
       decision.quality               = MathMin(95.0,MathMax(market.quality,selection.score)+3.0);
       decision.reason                = StringFormat("%s: clean range edge validated. support=%.5f resistance=%.5f rr=%.2f",
