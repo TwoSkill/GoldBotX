@@ -100,21 +100,27 @@ private:
       return GBX_REGIME_UNCERTAIN;
      }
 
-   double DetermineRiskMultiplier(const ENUM_GBX_MARKET_REGIME regime,
-                                  const double quality,
-                                  const double confidence) const
+   ENUM_GBX_SIGNAL_CLASS DetermineSignalClass(const ENUM_GBX_MARKET_REGIME regime,
+                                              const double quality,
+                                              const double confidence) const
      {
       if(regime == GBX_REGIME_UNTRADEABLE || regime == GBX_REGIME_UNCERTAIN ||
          regime == GBX_REGIME_HIGH_VOLATILITY)
-         return 0.0;
+         return GBX_SIGNAL_C;
 
-      // A: strong signal; B: valid signal with reduced risk.
       if(quality >= 90.0 && confidence >= 85.0)
-         return 1.0;
-      if(quality >= 80.0 && confidence >= 75.0)
-         return 0.75;
+         return GBX_SIGNAL_A;
       if(quality >= m_config.min_quality_score && confidence >= m_config.min_confidence)
-         return 0.45;
+         return GBX_SIGNAL_B;
+      return GBX_SIGNAL_C;
+     }
+
+   double RiskMultiplierForSignal(const ENUM_GBX_SIGNAL_CLASS signal_class) const
+     {
+      if(signal_class==GBX_SIGNAL_A)
+         return 1.00;
+      if(signal_class==GBX_SIGNAL_B)
+         return 0.55;
       return 0.0;
      }
 
@@ -140,7 +146,8 @@ public:
      {
       if(!data.ready || !features.ready || !analysis.ready)
         {
-         m_state.is_tradeable = false;
+         GBXInitializeMarketState(m_state);
+         m_state.favorability = GBX_FAVORABILITY_BLOCKED;
          return false;
         }
 
@@ -200,9 +207,10 @@ public:
          m_state.regime == GBX_REGIME_FORMING_TREND ||
          m_state.regime == GBX_REGIME_CLEAN_RANGE;
 
+      m_state.signal_class = DetermineSignalClass(m_state.regime,m_state.quality,m_state.confidence);
+      m_state.risk_multiplier = RiskMultiplierForSignal(m_state.signal_class);
       m_state.is_tradeable = permitted_regime &&
-                             m_state.quality >= m_config.min_quality_score &&
-                             m_state.confidence >= m_config.min_confidence &&
+                             m_state.signal_class!=GBX_SIGNAL_C &&
                              m_state.liquidity_score >= 55.0;
 
       if(m_state.regime == GBX_REGIME_UNTRADEABLE)
@@ -216,15 +224,9 @@ public:
       else
          m_state.favorability = GBX_FAVORABILITY_NEUTRAL;
 
-      m_state.risk_multiplier = DetermineRiskMultiplier(m_state.regime,
-                                                         m_state.quality,
-                                                         m_state.confidence);
-
       const bool addable_trend=IsStrongAlignedTrend(features,analysis);
       const bool addable_range=m_state.regime==GBX_REGIME_CLEAN_RANGE &&
-                               m_state.quality>=85.0 &&
-                               m_state.confidence>=80.0 &&
-                               m_state.risk_multiplier>=0.75;
+                               m_state.signal_class==GBX_SIGNAL_A;
       m_state.can_add_position = m_state.is_tradeable &&
                                  (addable_trend || addable_range);
       return true;
