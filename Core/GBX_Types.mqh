@@ -43,6 +43,7 @@ struct GBXMarketState
    ENUM_GBX_DIRECTION           direction;
    ENUM_GBX_SESSION             session;
    ENUM_GBX_MARKET_FAVORABILITY favorability;
+   ENUM_GBX_SIGNAL_CLASS        signal_class;
    bool                         is_tradeable;
    bool                         can_add_position;
    double                       trend_score;
@@ -64,28 +65,30 @@ struct GBXStrategySelection
 
 struct GBXDecision
   {
-   ENUM_GBX_ACTION   action;
-   ENUM_GBX_STRATEGY strategy;
-   double            confidence;
-   double            quality;
-   string            reason;
-   bool              has_price_targets;
-   double            preferred_stop_loss;
-   double            preferred_take_profit;
-   double            preferred_reward_risk;
+   ENUM_GBX_ACTION       action;
+   ENUM_GBX_STRATEGY     strategy;
+   ENUM_GBX_SIGNAL_CLASS signal_class;
+   double                confidence;
+   double                quality;
+   string                reason;
+   bool                  has_price_targets;
+   double                preferred_stop_loss;
+   double                preferred_take_profit;
+   double                preferred_reward_risk;
   };
 
 struct GBXTradePlan
   {
-   ENUM_GBX_ACTION action;
-   bool            is_addition;
-   double          entry_price;
-   double          volume;
-   double          stop_loss;
-   double          take_profit;
-   double          risk_percent;
-   double          planned_reward_risk;
-   string          rationale;
+   ENUM_GBX_ACTION       action;
+   ENUM_GBX_SIGNAL_CLASS signal_class;
+   bool                  is_addition;
+   double                entry_price;
+   double                volume;
+   double                stop_loss;
+   double                take_profit;
+   double                risk_percent;
+   double                planned_reward_risk;
+   string                rationale;
   };
 
 void GBXInitializeConfig(GBXConfig &config)
@@ -128,6 +131,7 @@ void GBXInitializeMarketState(GBXMarketState &state)
    state.direction        = GBX_DIRECTION_NEUTRAL;
    state.session          = GBX_SESSION_NONE;
    state.favorability     = GBX_FAVORABILITY_UNKNOWN;
+   state.signal_class     = GBX_SIGNAL_C;
    state.is_tradeable     = false;
    state.can_add_position = false;
    state.trend_score      = 0.0;
@@ -151,6 +155,7 @@ void GBXInitializeDecision(GBXDecision &decision)
   {
    decision.action                = GBX_ACTION_WAIT;
    decision.strategy              = GBX_STRATEGY_WAIT;
+   decision.signal_class          = GBX_SIGNAL_C;
    decision.confidence            = 0.0;
    decision.quality               = 0.0;
    decision.reason                = "";
@@ -163,6 +168,7 @@ void GBXInitializeDecision(GBXDecision &decision)
 void GBXInitializeTradePlan(GBXTradePlan &plan)
   {
    plan.action              = GBX_ACTION_WAIT;
+   plan.signal_class        = GBX_SIGNAL_C;
    plan.is_addition         = false;
    plan.entry_price         = 0.0;
    plan.volume              = 0.0;
