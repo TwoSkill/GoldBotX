@@ -21,11 +21,14 @@ public:
      {
       m_config=config;
       m_trade.SetExpertMagicNumber(m_config.magic_number);
+      m_trade.SetTypeFillingBySymbol(m_config.symbol);
       return true;
      }
 
    void Manage(const GBXDataSnapshot &data,const GBXMarketState &market)
      {
+      if(!m_config.trading_enabled || m_config.dry_run)
+         return;
       if(!data.ready || data.indicators.atr<=0.0)
          return;
 
@@ -35,13 +38,14 @@ public:
          if(symbol!=m_config.symbol || PositionGetInteger(POSITION_MAGIC)!=m_config.magic_number)
             continue;
 
+         const ulong ticket=(ulong)PositionGetInteger(POSITION_TICKET);
          const long type=PositionGetInteger(POSITION_TYPE);
          const double open=PositionGetDouble(POSITION_PRICE_OPEN);
          const double sl=PositionGetDouble(POSITION_SL);
          const double tp=PositionGetDouble(POSITION_TP);
          const double current=(type==POSITION_TYPE_BUY ? data.quote.bid : data.quote.ask);
          const double risk=MathAbs(open-sl);
-         if(risk<=0.0)
+         if(ticket==0 || risk<=0.0)
             continue;
 
          const double profit_distance=(type==POSITION_TYPE_BUY ? current-open : open-current);
@@ -65,7 +69,7 @@ public:
            }
 
          if(new_sl!=sl)
-            m_trade.PositionModify(symbol,new_sl,tp);
+            m_trade.PositionModify(ticket,new_sl,tp);
         }
      }
   };
