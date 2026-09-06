@@ -10,11 +10,39 @@ class CGBXTradeManager
 private:
    GBXConfig m_config;
    CTrade    m_trade;
+   string    m_last_result;
+
+   double NormalizePriceToTick(const double price) const
+     {
+      const double tick_size=SymbolInfoDouble(m_config.symbol,SYMBOL_TRADE_TICK_SIZE);
+      const int digits=(int)SymbolInfoInteger(m_config.symbol,SYMBOL_DIGITS);
+      if(tick_size<=0.0)
+         return NormalizeDouble(price,digits);
+      return NormalizeDouble(MathRound(price/tick_size)*tick_size,digits);
+     }
+
+   bool StopCanBeModified(const long type,const double current,const double new_sl) const
+     {
+      const double point=SymbolInfoDouble(m_config.symbol,SYMBOL_POINT);
+      if(point<=0.0 || current<=0.0 || new_sl<=0.0)
+         return false;
+
+      const double stop_distance=SymbolInfoInteger(m_config.symbol,SYMBOL_TRADE_STOPS_LEVEL)*point;
+      const double freeze_distance=SymbolInfoInteger(m_config.symbol,SYMBOL_TRADE_FREEZE_LEVEL)*point;
+      const double minimum_distance=MathMax(stop_distance,freeze_distance);
+
+      if(type==POSITION_TYPE_BUY)
+         return new_sl<current-minimum_distance;
+      if(type==POSITION_TYPE_SELL)
+         return new_sl>current+minimum_distance;
+      return false;
+     }
 
 public:
    CGBXTradeManager(void)
      {
       GBXInitializeConfig(m_config);
+      m_last_result="";
      }
 
    bool Initialize(const GBXConfig &config)
@@ -22,6 +50,7 @@ public:
       m_config=config;
       m_trade.SetExpertMagicNumber(m_config.magic_number);
       m_trade.SetTypeFillingBySymbol(m_config.symbol);
+      m_last_result="";
       return true;
      }
 
@@ -68,9 +97,30 @@ public:
                new_sl=(new_sl==0.0 ? trail : MathMin(new_sl,trail));
            }
 
-         if(new_sl!=sl)
-            m_trade.PositionModify(ticket,new_sl,tp);
+         new_sl=NormalizePriceToTick(new_sl);
+         if(new_sl==sl || !StopCanBeModified(type,current,new_sl))
+            continue;
+
+         if(type==POSITION_TYPE_BUY && new_sl<sl)
+            continue;
+         if(type==POSITION_TYPE_SELL && sl>0.0 && new_sl>sl)
+            continue;
+
+         const bool modified=m_trade.PositionModify(ticket,new_sl,tp);
+         const uint retcode=m_trade.ResultRetcode();
+         m_last_result=StringFormat("POSITION_MODIFY ticket=%I64d modified=%s retcode=%u description=%s sl=%.5f tp=%.5f",
+                                    (long)ticket,
+                                    (modified ? "true" : "false"),
+                                    retcode,
+                                    m_trade.ResultRetcodeDescription(),
+                                    new_sl,
+                                    tp);
         }
+     }
+
+   string LastResult(void) const
+     {
+      return m_last_result;
      }
   };
 
