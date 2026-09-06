@@ -52,6 +52,11 @@ private:
       return ClampScore(session_score*0.70+features.spread_quality*0.30);
      }
 
+   double VolatilityBalanceScore(const double volatility_score) const
+     {
+      return ClampScore(100.0-MathAbs(volatility_score-45.0)*2.0);
+     }
+
    bool IsStrongAlignedTrend(const GBXFeatureSnapshot &features,
                              const GBXAnalysisSnapshot &analysis) const
      {
@@ -149,22 +154,45 @@ public:
       m_state.volatility_score = analysis.volatility.score;
       m_state.liquidity_score  = DetermineLiquidityScore(m_state.session,features);
 
-      m_state.quality = ClampScore(
-         analysis.trend.score*0.28 +
-         analysis.structure.score*0.23 +
-         features.momentum_score*0.19 +
-         features.spread_quality*0.10 +
-         features.candle_quality*0.10 +
-         m_state.liquidity_score*0.10);
+      if(m_state.regime==GBX_REGIME_CLEAN_RANGE)
+        {
+         const double no_trend_score=ClampScore(100.0-analysis.trend.score*2.0);
+         const double neutral_structure_score=(analysis.structure.direction==GBX_DIRECTION_NEUTRAL ? 100.0 : 45.0);
+         const double volatility_balance=VolatilityBalanceScore(analysis.volatility.score);
 
-      const double alignment_bonus = features.primary_context_aligned ? 10.0 : 0.0;
-      const double liquidity_bonus = m_state.liquidity_score >= 80.0 ? 5.0 : 0.0;
-      m_state.confidence = ClampScore(
-         features.preliminary_quality*0.38 +
-         analysis.trend.score*0.30 +
-         analysis.structure.score*0.20 +
-         alignment_bonus +
-         liquidity_bonus);
+         m_state.quality = ClampScore(
+            no_trend_score*0.25 +
+            neutral_structure_score*0.20 +
+            features.spread_quality*0.20 +
+            m_state.liquidity_score*0.20 +
+            volatility_balance*0.15);
+
+         m_state.confidence = ClampScore(
+            no_trend_score*0.28 +
+            neutral_structure_score*0.22 +
+            features.spread_quality*0.18 +
+            m_state.liquidity_score*0.17 +
+            volatility_balance*0.15);
+        }
+      else
+        {
+         m_state.quality = ClampScore(
+            analysis.trend.score*0.28 +
+            analysis.structure.score*0.23 +
+            features.momentum_score*0.19 +
+            features.spread_quality*0.10 +
+            features.candle_quality*0.10 +
+            m_state.liquidity_score*0.10);
+
+         const double alignment_bonus = features.primary_context_aligned ? 10.0 : 0.0;
+         const double liquidity_bonus = m_state.liquidity_score >= 80.0 ? 5.0 : 0.0;
+         m_state.confidence = ClampScore(
+            features.preliminary_quality*0.38 +
+            analysis.trend.score*0.30 +
+            analysis.structure.score*0.20 +
+            alignment_bonus +
+            liquidity_bonus);
+        }
 
       const bool permitted_regime =
          m_state.regime == GBX_REGIME_BULLISH_TREND ||
