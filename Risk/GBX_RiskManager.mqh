@@ -119,6 +119,45 @@ private:
       return false;
      }
 
+   double OpenPositionRiskMoney(void) const
+     {
+      const double equity=AccountInfoDouble(ACCOUNT_EQUITY);
+      double total_risk=0.0;
+
+      for(int i=0;i<PositionsTotal();i++)
+        {
+         if(PositionGetSymbol(i) != m_config.symbol)
+            continue;
+         if(PositionGetInteger(POSITION_MAGIC) != m_config.magic_number)
+            continue;
+
+         const long type=PositionGetInteger(POSITION_TYPE);
+         const double open=PositionGetDouble(POSITION_PRICE_OPEN);
+         const double stop=PositionGetDouble(POSITION_SL);
+         const double volume=PositionGetDouble(POSITION_VOLUME);
+
+         if(stop<=0.0 || volume<=0.0)
+           {
+            total_risk += equity*m_config.max_risk_per_trade_percent/100.0;
+            continue;
+           }
+
+         if(type==POSITION_TYPE_BUY && stop>=open)
+            continue;
+         if(type==POSITION_TYPE_SELL && stop<=open)
+            continue;
+
+         double profit_at_stop=0.0;
+         const ENUM_ORDER_TYPE order_type=(type==POSITION_TYPE_BUY ? ORDER_TYPE_BUY : ORDER_TYPE_SELL);
+         if(OrderCalcProfit(order_type,m_config.symbol,volume,open,stop,profit_at_stop))
+            total_risk += MathMax(0.0,-profit_at_stop);
+         else
+            total_risk += equity*m_config.max_risk_per_trade_percent/100.0;
+        }
+
+      return total_risk;
+     }
+
    double CalculateVolume(const double entry,const double stop,const double risk_percent) const
      {
       const double equity     = AccountInfoDouble(ACCOUNT_EQUITY);
@@ -177,6 +216,8 @@ public:
 
       if(decision.action!=GBX_ACTION_BUY && decision.action!=GBX_ACTION_SELL)
          return Reject("Risk plan skipped: decision is not BUY or SELL.");
+      if(decision.signal_class==GBX_SIGNAL_C)
+         return Reject("Risk plan rejected: signal class C is not executable.");
       if(DailyLossLimitReached())
          return Reject("Risk plan rejected: daily loss limit reached.");
 
@@ -190,15 +231,21 @@ public:
       if(open_positions>0 && !market.can_add_position)
          return Reject("Risk plan rejected: market quality does not allow adding another position.");
 
+      const double equity=AccountInfoDouble(ACCOUNT_EQUITY);
+      if(equity<=0.0)
+         return Reject("Risk plan rejected: account equity is not valid.");
+
       double risk_percent=MathMin(m_config.max_risk_per_trade_percent,
                                   m_config.risk_per_trade_percent*market.risk_multiplier*ProfileMultiplier());
-      const double remaining_budget=m_config.max_aggregate_risk_percent-
-                                   open_positions*m_config.max_risk_per_trade_percent;
-      risk_percent=MathMin(risk_percent,remaining_budget);
+      const double aggregate_risk_money=OpenPositionRiskMoney();
+      const double aggregate_budget_money=equity*m_config.max_aggregate_risk_percent/100.0;
+      const double remaining_budget_percent=(aggregate_budget_money-aggregate_risk_money)/equity*100.0;
+      risk_percent=MathMin(risk_percent,remaining_budget_percent);
       if(risk_percent<=0.0)
-         return Reject("Risk plan rejected: aggregate risk budget is exhausted.");
+         return Reject("Risk plan rejected: aggregate risk budget is exhausted by open stop risk.");
 
       plan.action=decision.action;
+      plan.signal_class=decision.signal_class;
       plan.is_addition=open_positions>0;
       plan.risk_percent=risk_percent;
       plan.entry_price=(decision.action==GBX_ACTION_BUY ? data.quote.ask : data.quote.bid);
@@ -251,7 +298,7 @@ public:
          return Reject("Risk plan rejected: calculated volume is below broker minimum for the configured risk.");
 
       plan.rationale=decision.reason;
-      m_last_reason="Risk plan accepted.";
+      m_last_reason=StringFormat("Risk plan accepted. aggregate_stop_risk=%.2f budget=%.2f",aggregate_risk_money,aggregate_budget_money);
       return true;
      }
 
