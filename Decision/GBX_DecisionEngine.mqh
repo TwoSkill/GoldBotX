@@ -15,11 +15,25 @@ private:
                 const GBXStrategySelection &selection,
                 const string reason)
      {
-      m_decision.action     = GBX_ACTION_WAIT;
-      m_decision.strategy   = selection.strategy;
-      m_decision.confidence = market.confidence;
-      m_decision.quality    = market.quality;
-      m_decision.reason     = reason;
+      m_decision.action       = GBX_ACTION_WAIT;
+      m_decision.strategy     = selection.strategy;
+      m_decision.signal_class = market.signal_class;
+      m_decision.confidence   = market.confidence;
+      m_decision.quality      = market.quality;
+      m_decision.reason       = reason;
+     }
+
+   void SetTrade(const ENUM_GBX_ACTION action,
+                 const GBXMarketState &market,
+                 const GBXStrategySelection &selection,
+                 const string reason)
+     {
+      m_decision.action       = action;
+      m_decision.strategy     = selection.strategy;
+      m_decision.signal_class = market.signal_class;
+      m_decision.confidence   = market.confidence;
+      m_decision.quality      = market.quality;
+      m_decision.reason       = reason;
      }
 
 public:
@@ -42,9 +56,9 @@ public:
      {
       GBXInitializeDecision(m_decision);
 
-      if(!market.is_tradeable)
+      if(!market.is_tradeable || market.signal_class==GBX_SIGNAL_C)
         {
-         SetWait(market,selection,"WAIT: market is not currently tradeable.");
+         SetWait(market,selection,"WAIT: market is not currently tradeable or signal class is C.");
          return true;
         }
 
@@ -52,21 +66,13 @@ public:
         {
          if(market.direction == GBX_DIRECTION_BULLISH)
            {
-            m_decision.action     = GBX_ACTION_BUY;
-            m_decision.strategy   = selection.strategy;
-            m_decision.confidence = market.confidence;
-            m_decision.quality    = market.quality;
-            m_decision.reason     = "BUY: trend, structure and market quality are aligned.";
+            SetTrade(GBX_ACTION_BUY,market,selection,"BUY: trend, structure and market quality are aligned.");
             return true;
            }
 
          if(market.direction == GBX_DIRECTION_BEARISH)
            {
-            m_decision.action     = GBX_ACTION_SELL;
-            m_decision.strategy   = selection.strategy;
-            m_decision.confidence = market.confidence;
-            m_decision.quality    = market.quality;
-            m_decision.reason     = "SELL: trend, structure and market quality are aligned.";
+            SetTrade(GBX_ACTION_SELL,market,selection,"SELL: trend, structure and market quality are aligned.");
             return true;
            }
         }
