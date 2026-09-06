@@ -1,5 +1,5 @@
 #property copyright "GoldBot X"
-#property version   "0.2.2"
+#property version   "0.2.3"
 #property strict
 
 #include "Core/GBX_Core.mqh"
