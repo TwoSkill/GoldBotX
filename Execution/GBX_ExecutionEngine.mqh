@@ -19,6 +19,45 @@ private:
              retcode==TRADE_RETCODE_DONE_PARTIAL;
      }
 
+   int VolumeDigits(const double step) const
+     {
+      double value=step;
+      int digits=0;
+      while(value<1.0 && digits<8)
+        {
+         value*=10.0;
+         digits++;
+        }
+      return digits;
+     }
+
+   double NormalizeVolume(const double volume) const
+     {
+      const double step=SymbolInfoDouble(m_config.symbol,SYMBOL_VOLUME_STEP);
+      if(step<=0.0)
+         return 0.0;
+      return NormalizeDouble(MathFloor(volume/step)*step,VolumeDigits(step));
+     }
+
+   double NormalizePriceToTick(const double price) const
+     {
+      const double tick_size=SymbolInfoDouble(m_config.symbol,SYMBOL_TRADE_TICK_SIZE);
+      const int digits=(int)SymbolInfoInteger(m_config.symbol,SYMBOL_DIGITS);
+      if(tick_size<=0.0)
+         return NormalizeDouble(price,digits);
+      return NormalizeDouble(MathRound(price/tick_size)*tick_size,digits);
+     }
+
+   ENUM_ORDER_TYPE_FILLING ResolveFillingMode(void) const
+     {
+      const long filling=(long)SymbolInfoInteger(m_config.symbol,SYMBOL_FILLING_MODE);
+      if((filling & SYMBOL_FILLING_FOK)==SYMBOL_FILLING_FOK)
+         return ORDER_FILLING_FOK;
+      if((filling & SYMBOL_FILLING_IOC)==SYMBOL_FILLING_IOC)
+         return ORDER_FILLING_IOC;
+      return ORDER_FILLING_RETURN;
+     }
+
    bool ValidatePlan(const GBXTradePlan &plan,string &reason)
      {
       reason="";
@@ -49,6 +88,17 @@ private:
          return false;
         }
 
+      const double point=SymbolInfoDouble(m_config.symbol,SYMBOL_POINT);
+      const double tick_size=SymbolInfoDouble(m_config.symbol,SYMBOL_TRADE_TICK_SIZE);
+      const double tick_value=SymbolInfoDouble(m_config.symbol,SYMBOL_TRADE_TICK_VALUE);
+      const double bid=SymbolInfoDouble(m_config.symbol,SYMBOL_BID);
+      const double ask=SymbolInfoDouble(m_config.symbol,SYMBOL_ASK);
+      if(point<=0.0 || tick_size<=0.0 || tick_value<=0.0 || bid<=0.0 || ask<=0.0)
+        {
+         reason="INVALID_SYMBOL_PRICE_DATA";
+         return false;
+        }
+
       const long trade_mode=SymbolInfoInteger(m_config.symbol,SYMBOL_TRADE_MODE);
       if(trade_mode==SYMBOL_TRADE_MODE_DISABLED)
         {
@@ -68,6 +118,12 @@ private:
 
       const double minimum=SymbolInfoDouble(m_config.symbol,SYMBOL_VOLUME_MIN);
       const double maximum=SymbolInfoDouble(m_config.symbol,SYMBOL_VOLUME_MAX);
+      const double step=SymbolInfoDouble(m_config.symbol,SYMBOL_VOLUME_STEP);
+      if(minimum<=0.0 || maximum<=0.0 || step<=0.0)
+        {
+         reason="INVALID_VOLUME_RULES";
+         return false;
+        }
       if(plan.volume<minimum)
         {
          reason="VOLUME_BELOW_MINIMUM";
@@ -78,22 +134,33 @@ private:
          reason="INVALID_VOLUME";
          return false;
         }
+      if(MathAbs(plan.volume-NormalizeVolume(plan.volume))>step*0.001)
+        {
+         reason="INVALID_VOLUME_STEP";
+         return false;
+        }
 
-      const double point=SymbolInfoDouble(m_config.symbol,SYMBOL_POINT);
-      const double bid=SymbolInfoDouble(m_config.symbol,SYMBOL_BID);
-      const double ask=SymbolInfoDouble(m_config.symbol,SYMBOL_ASK);
-      const double minimum_distance=SymbolInfoInteger(m_config.symbol,SYMBOL_TRADE_STOPS_LEVEL)*point;
+      if(MathAbs(plan.stop_loss-NormalizePriceToTick(plan.stop_loss))>tick_size*0.10 ||
+         MathAbs(plan.take_profit-NormalizePriceToTick(plan.take_profit))>tick_size*0.10)
+        {
+         reason="INVALID_PRICE_TICK_SIZE";
+         return false;
+        }
+
+      const double stop_distance=SymbolInfoInteger(m_config.symbol,SYMBOL_TRADE_STOPS_LEVEL)*point;
+      const double freeze_distance=SymbolInfoInteger(m_config.symbol,SYMBOL_TRADE_FREEZE_LEVEL)*point;
+      const double minimum_distance=MathMax(stop_distance,freeze_distance);
 
       if(plan.action==GBX_ACTION_BUY &&
          (plan.stop_loss>=bid-minimum_distance || plan.take_profit<=ask+minimum_distance))
         {
-         reason="INVALID_STOPS";
+         reason=(freeze_distance>0.0 ? "INVALID_STOPS_OR_FREEZE_LEVEL" : "INVALID_STOPS");
          return false;
         }
       if(plan.action==GBX_ACTION_SELL &&
          (plan.stop_loss<=ask+minimum_distance || plan.take_profit>=bid-minimum_distance))
         {
-         reason="INVALID_STOPS";
+         reason=(freeze_distance>0.0 ? "INVALID_STOPS_OR_FREEZE_LEVEL" : "INVALID_STOPS");
          return false;
         }
 
@@ -106,6 +173,33 @@ private:
          reason="INSUFFICIENT_MARGIN";
          return false;
         }
+
+      MqlTradeRequest request;
+      MqlTradeCheckResult check;
+      ZeroMemory(request);
+      ZeroMemory(check);
+      request.action=TRADE_ACTION_DEAL;
+      request.symbol=m_config.symbol;
+      request.magic=m_config.magic_number;
+      request.volume=plan.volume;
+      request.type=order_type;
+      request.price=price;
+      request.sl=plan.stop_loss;
+      request.tp=plan.take_profit;
+      request.deviation=20;
+      request.type_filling=ResolveFillingMode();
+
+      if(!OrderCheck(request,check))
+        {
+         reason=StringFormat("ORDER_CHECK_FAILED retcode=%u comment=%s",check.retcode,check.comment);
+         return false;
+        }
+      if(check.retcode!=TRADE_RETCODE_DONE && check.retcode!=TRADE_RETCODE_PLACED)
+        {
+         reason=StringFormat("ORDER_CHECK_REJECTED retcode=%u comment=%s",check.retcode,check.comment);
+         return false;
+        }
+
       return true;
      }
 
@@ -143,7 +237,9 @@ public:
 
       if(m_config.dry_run)
         {
-         m_last_result="DRY_RUN_VALIDATED";
+         m_last_result=StringFormat("DRY_RUN_VALIDATED signal=%s volume=%.3f risk=%.2f entry=%.5f sl=%.5f tp=%.5f rr=%.2f",
+                                    EnumToString(plan.signal_class),plan.volume,plan.risk_percent,
+                                    plan.entry_price,plan.stop_loss,plan.take_profit,plan.planned_reward_risk);
          return false;
         }
 
@@ -154,10 +250,11 @@ public:
          submitted=m_trade.Sell(plan.volume,m_config.symbol,0.0,plan.stop_loss,plan.take_profit,"GoldBot X");
 
       const uint retcode=m_trade.ResultRetcode();
-      m_last_result=StringFormat("retcode=%u description=%s deal=%I64d price=%.5f volume=%.3f",
+      m_last_result=StringFormat("retcode=%u description=%s deal=%I64d order=%I64d price=%.5f volume=%.3f",
                                  retcode,
                                  m_trade.ResultRetcodeDescription(),
                                  (long)m_trade.ResultDeal(),
+                                 (long)m_trade.ResultOrder(),
                                  m_trade.ResultPrice(),
                                  m_trade.ResultVolume());
 
